@@ -1,12 +1,6 @@
 import axios from 'axios';
-import type {Movie} from "../types/movie.ts";
+import type {FetchMoviesResponse} from "../types/movie.ts";
 
-interface FetchMoviesResponse {
-    results: Movie[];
-    page: number;
-    total_pages: number;
-    total_results: number;
-}
 
 const api = axios.create({
     baseURL: 'https://api.themoviedb.org/3',
@@ -17,12 +11,13 @@ const api = axios.create({
     }
 });
 
-export const getMovies = async (query: string, { signal }: { signal?: AbortSignal } = {}): Promise<Movie[]> => {
+export const getMovies = async (query: string, page: number, { signal }: { signal?: AbortSignal } = {}): Promise<FetchMoviesResponse> => {
     const response = await api.get<FetchMoviesResponse>('/search/movie', {
         params: {
-            query: query
+            query,
+            page
         },
         signal
     });
-    return response.data.results || [];
+    return response.data;
 };
