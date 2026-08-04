@@ -1,41 +1,70 @@
-import css from './App.module.css'
-import {useState} from "react";
-import type {Votes, VoteType} from "../../types/votes.ts";
-import CafeInfo from "../CafeInfo/CafeInfo.tsx";
-import VoteOptions from "../VoteOptions/VoteOptions.tsx";
-import VoteStats from "../VoteStats/VoteStats.tsx";
-import Notification from "../Notification/Notification.tsx";
-
-const DEFAULT_VOTES = {
-    good: 0,
-    neutral: 0,
-    bad: 0,
-}
-
+import {useEffect, useState} from 'react';
+import styles from './App.module.css';
+import {SearchBar} from '../SearchBar/SearchBar';
+import {MovieGrid} from '../MovieGrid/MovieGrid';
+import {getMovies} from '../../services/movieService.ts';
+import type {Movie} from '../../types/movie';
+import Loader from "../Loader/Loader.tsx";
+import MovieModal from '../MovieModal/MovieModal';
+import {ErrorMessage} from "../ErrorMessage/ErrorMessage";
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 function App() {
-    const [votes, setVotes] = useState<Votes>(DEFAULT_VOTES)
-    const totalVotes = votes.good + votes.neutral + votes.bad;
-    const positiveRate = totalVotes
-        ? Math.round((votes.good / totalVotes) * 100)
-        : 0;
-    const canReset = totalVotes > 0;
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(1);
+    const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
-    const handleVote = (vote: VoteType) => {
-        setVotes(prev => ({
-            ...prev,
-            [vote]: prev[vote] + 1,
-        }));
+    const {data, isLoading, isError, isSuccess} = useQuery({
+        queryKey: ['movies', query, page],
+
+        queryFn: () => getMovies(query, page, {signal: controller.signal}),
+        enabled: query !== '',
+        placeholderData: keepPreviousData,
+    });
+
+    const handleSearch = (searchQuery: string) => {
+        setQuery(searchQuery);
     };
 
+    const handleMovieClick = (movie: Movie) => {
+        setSelectedMovie(movie);
+    };
+
+    const handleCloseModal = () => {
+        setSelectedMovie(null);
+    };
+
+    useEffect(() => {
+        if (!query) return;
+        setIsError(false);
+        const controller = new AbortController();
+        setIsLoading(true);
+        const fetchData = async () => {
+            try {
+                const movies = await getMovies(query, {signal: controller.signal});
+                if (movies.length === 0) {
+                    setIsError(true);
+                }
+                setData(movies);
+            } catch (error) {
+                if (!(error instanceof Error) || error.name !== 'AbortError') {
+                    setIsError(true);
+                }
+            }
+            setIsLoading(false);
+        };
+        fetchData();
+        return () => controller.abort();
+    }, [query]);
+
     return (
-        <div className={css.app}>
-            <CafeInfo/>
-            <VoteOptions onVote={handleVote} onReset={() => setVotes(DEFAULT_VOTES)} canReset={canReset} />
-            {canReset ? (
-                <VoteStats votes={votes} totalVotes={totalVotes} positiveRate={positiveRate}/>
-            ) : (
-                <Notification />
+        <div className={styles.app}>
+            <SearchBar onSubmit={handleSearch}/>
+            {isLoading && <Loader/>}
+            {isError && <ErrorMessage/>}
+            {!isLoading && !isError && data.length > 0 && <MovieGrid movies={data} onSelect={handleMovieClick}/>}
+            {selectedMovie && (
+                <MovieModal movie={selectedMovie} onClose={handleCloseModal}/>
             )}
         </div>
     )
